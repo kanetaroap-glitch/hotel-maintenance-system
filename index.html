@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ช่างประจำโรงแรม</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <section id="loginScreen" class="login-screen">
+        <div class="login-shell">
+            <div class="login-brand-panel">
+                <div class="login-brand-logos">
+                    <div class="login-brand-chip login-brand-chip--mercure">
+                        <img src="รูป/logo-mercure.png" alt="Mercure Hotels logo">
+                    </div>
+                    <div class="login-brand-separator" aria-hidden="true"></div>
+                    <div class="login-brand-chip login-brand-chip--ibis">
+                        <img src="รูป/logo-ibisstyles.png" alt="ibis Styles logo">
+                    </div>
+                </div>
+            </div>
+
+            <div class="login-card">
+                <div class="login-copy">
+                    <span class="login-kicker">Engineering Access</span>
+                    <h1>เข้าสู่ระบบงานช่าง</h1>
+                    <p>สำหรับเข้าใช้งานระบบติดตามงานซ่อมของคลัสเตอร์โรงแรม</p>
+                </div>
+
+                <form id="loginForm" class="login-form">
+                    <label>
+                        <span>ชื่อผู้ใช้งาน</span>
+                        <input type="text" id="loginUsername" placeholder="เช่น engineer.mbk" autocomplete="username" required>
+                    </label>
+
+                    <label>
+                        <span>รหัสผ่าน</span>
+                        <input type="password" id="loginPassword" placeholder="กรอกรหัสผ่าน" autocomplete="current-password" required>
+                    </label>
+
+                    <button class="login-button" type="submit">เข้าสู่ระบบ</button>
+                </form>
+
+                <div id="loginMessage" class="login-message" hidden></div>
+            </div>
+        </div>
+    </section>
+
+    <main id="appRoot" class="app-shell app-shell--hidden">
+        <section class="hero-card hero-card--visual" aria-label="Hotel cluster banner">
+            <div class="brand-stage">
+                <div class="brand-orb brand-orb--mercure" aria-hidden="true"></div>
+                <div class="brand-orb brand-orb--ibis" aria-hidden="true"></div>
+
+                <div class="brand-panel brand-panel--mercure">
+                    <img class="brand-panel-logo brand-panel-logo--mercure" src="รูป/logo-mercure.png" alt="Mercure Hotels logo">
+                </div>
+
+                <div class="brand-divider" aria-hidden="true">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+
+                <div class="brand-panel brand-panel--ibis">
+                    <img class="brand-panel-logo brand-panel-logo--ibis" src="รูป/logo-ibisstyles.png" alt="ibis Styles logo">
+                </div>
+            </div>
+        </section>
+
+        <section class="workspace-card">
+            <div class="workspace-topbar">
+                <div class="user-pill-group">
+                    <div class="user-pill">
+                        <span>ผู้ใช้งาน:</span>
+                        <strong id="activeUserLabel">-</strong>
+                    </div>
+                    <span id="activeUserRole" class="role-badge role-badge--employee">พนักงาน</span>
+                </div>
+                <div class="workspace-actions">
+                    <button id="openUserManageButton" class="ghost-button supervisor-only" type="button" hidden>จัดการผู้ใช้</button>
+                    <button id="openReportButton" class="report-button supervisor-only" type="button" hidden>พิมพ์รายงาน PDF</button>
+                    <button id="openSummaryButton" class="summary-button supervisor-only" type="button" hidden>ดูรายการงานรวม</button>
+                    <button id="logoutButton" class="logout-button" type="button">ออกจากระบบ</button>
+                </div>
+            </div>
+
+            <div class="section-heading">
+                <span class="step-badge" id="stepBadge">ขั้นตอน 1</span>
+                <h2 id="sectionTitle">เลือกโรงแรมที่ต้องการทำงาน</h2>
+                <p id="sectionDescription">เลือกได้ 2 โรงในคลัสเตอร์นี้</p>
+            </div>
+
+            <div id="hotelView" class="panel active" aria-live="polite">
+                <div class="hotel-grid">
+                    <button class="hotel-card hotel-card--mercure" type="button" data-hotel="Mercure Bangkok Surawong">
+                        <div class="hotel-card-top">
+                            <span class="hotel-tag hotel-tag--mercure">Mercure</span>
+                            <span class="hotel-cta">เลือกโรงนี้</span>
+                        </div>
+
+                        <div class="hotel-logo-wrap hotel-logo-wrap--mercure">
+                            <img class="hotel-logo hotel-logo--mercure" src="รูป/logo-mercure.png" alt="Mercure Hotels logo">
+                        </div>
+
+                        <div class="hotel-copy">
+                            <strong>Mercure Bangkok Surawong</strong>
+                            <p>โทนพรีเมียม ดูเรียบหรู ใช้งานเป็นฐานงานของฝั่ง Mercure</p>
+                        </div>
+
+                        <div class="hotel-card-footer">
+                            <span>ค้นหาห้องหรือพื้นที่ แล้วเปิดงานได้ทันที</span>
+                        </div>
+                    </button>
+
+                    <button class="hotel-card hotel-card--ibis" type="button" data-hotel="ibis Styles Bangkok Silom">
+                        <div class="hotel-card-top">
+                            <span class="hotel-tag hotel-tag--ibis">ibis Styles</span>
+                            <span class="hotel-cta">เลือกโรงนี้</span>
+                        </div>
+
+                        <div class="hotel-logo-wrap hotel-logo-wrap--ibis">
+                            <img class="hotel-logo hotel-logo--ibis" src="รูป/logo-ibisstyles.png" alt="ibis Styles logo">
+                        </div>
+
+                        <div class="hotel-copy">
+                            <strong>ibis Styles Bangkok Silom</strong>
+                            <p>โทนสดชัด เน้นค้นหาเลขห้องไว และตามงานค้างได้ง่าย</p>
+                        </div>
+
+                        <div class="hotel-card-footer">
+                            <span>ค้นหาห้องจากเลขห้องหรือพื้นที่ตามผังที่ลงไว้</span>
+                        </div>
+                    </button>
+                </div>
+            </div>
+
+            <div id="roomView" class="panel" aria-live="polite">
+                <div class="toolbar">
+                    <button class="ghost-button" id="backToHotels" type="button">กลับไปเลือกโรงแรม</button>
+                    <div class="selection-pill">
+                        โรงแรมที่เลือก: <strong id="selectedHotelLabel">-</strong>
+                    </div>
+                </div>
+
+                <div id="searchPanel" class="search-panel" hidden>
+                    <label class="search-label" for="roomSearchInput">
+                        <span>ค้นหาเลขห้อง</span>
+                        <input type="search" id="roomSearchInput" placeholder="พิมพ์เลขห้อง เช่น 203, 420, 801">
+                    </label>
+                    <div id="searchHint" class="search-hint">เริ่มพิมพ์เพื่อค้นหาห้องหรือพื้นที่ที่ต้องการ</div>
+                    <div id="roomSearchResults" class="search-results"></div>
+                </div>
+
+                <div class="room-grid" id="roomGrid"></div>
+
+                <section class="case-board">
+                    <div class="case-board-header">
+                        <div>
+                            <h3>เคสที่ยังดำเนินการไม่เสร็จ</h3>
+                            <p id="caseBoardDescription">แสดงเฉพาะงานที่ยังไม่เสร็จจากฐานข้อมูลจริงใน Google Sheets</p>
+                        </div>
+                        <div class="case-board-actions">
+                            <button id="openReportFromCases" class="ghost-button report-inline-button supervisor-only" type="button" hidden>พิมพ์รายงาน PDF</button>
+                            <span class="case-badge" id="caseBadge">0 เคส</span>
+                        </div>
+                    </div>
+                    <div id="caseList" class="case-list"></div>
+                </section>
+            </div>
+
+            <div id="formView" class="panel" aria-live="polite">
+                <div class="toolbar">
+                    <button class="ghost-button" id="backToRooms" type="button">กลับไปเลือกห้อง</button>
+                    <div class="selection-pill">
+                        <span id="selectedContext">โรงแรม - | ห้อง -</span>
+                    </div>
+                </div>
+
+                <form id="jobForm" class="job-form">
+                    <div class="form-grid">
+                        <label>
+                            <span>โรงแรม</span>
+                            <input type="text" id="hotelInput" readonly>
+                        </label>
+
+                        <label>
+                            <span>ห้อง / พื้นที่</span>
+                            <input type="text" id="roomInput" readonly>
+                        </label>
+
+                        <label>
+                            <span>ส่วนงาน</span>
+                            <select id="category" required>
+                                <option value="">เลือกส่วนงาน</option>
+                                <option value="ระบบไฟฟ้า">ระบบไฟฟ้า</option>
+                                <option value="ระบบน้ำ">ระบบน้ำ</option>
+                                <option value="เครื่องปรับอากาศ">เครื่องปรับอากาศ</option>
+                                <option value="เฟอร์นิเจอร์">เฟอร์นิเจอร์</option>
+                                <option value="งานทั่วไป">งานทั่วไป</option>
+                            </select>
+                        </label>
+
+                        <label>
+                            <span>สถานะงาน</span>
+                            <select id="status" required>
+                                <option value="">เลือกสถานะ</option>
+                                <option value="รอดำเนินการ">รอดำเนินการ</option>
+                                <option value="กำลังดำเนินการ">กำลังดำเนินการ</option>
+                                <option value="ยังไม่เสร็จ">ยังไม่เสร็จ</option>
+                                <option value="เสร็จสิ้น">เสร็จสิ้น</option>
+                            </select>
+                        </label>
+                    </div>
+
+                    <label class="full-width">
+                        <span>รายละเอียดการทำงาน</span>
+                        <textarea id="detail" rows="6" placeholder="เช่น เปลี่ยนหลอดไฟในห้องน้ำ ตรวจเช็กปลั๊กหัวเตียง และทดสอบการใช้งาน" required></textarea>
+                    </label>
+
+                    <div class="form-actions">
+                        <button class="primary-button" type="submit">บันทึกงาน</button>
+                    </div>
+                </form>
+
+                <div id="message" class="message-box" hidden></div>
+            </div>
+
+            <div id="summaryView" class="panel" aria-live="polite">
+                <div class="toolbar">
+                    <button class="ghost-button" id="backFromSummary" type="button">กลับไปเลือกโรงแรม</button>
+                    <button class="primary-button summary-refresh-button" id="refreshJobs" type="button">รีเฟรชข้อมูล</button>
+                </div>
+
+                <div class="summary-stats" id="summaryStats">
+                    <div class="summary-stat-card">
+                        <span>งานทั้งหมด</span>
+                        <strong id="summaryTotal">0</strong>
+                    </div>
+                    <div class="summary-stat-card summary-stat-card--pending">
+                        <span>ยังไม่เสร็จ</span>
+                        <strong id="summaryIncomplete">0</strong>
+                    </div>
+                    <div class="summary-stat-card summary-stat-card--mercure">
+                        <span>Mercure</span>
+                        <strong id="summaryMercure">0</strong>
+                    </div>
+                    <div class="summary-stat-card summary-stat-card--ibis">
+                        <span>ibis Styles</span>
+                        <strong id="summaryIbis">0</strong>
+                    </div>
+                </div>
+
+                <div class="summary-filters">
+                    <label>
+                        <span>กรองตามโรงแรม</span>
+                        <select id="summaryHotelFilter">
+                            <option value="all">ทุกโรงแรม</option>
+                            <option value="Mercure Bangkok Surawong">Mercure Bangkok Surawong</option>
+                            <option value="ibis Styles Bangkok Silom">ibis Styles Bangkok Silom</option>
+                        </select>
+                    </label>
+
+                    <label>
+                        <span>กรองตามสถานะ</span>
+                        <select id="summaryStatusFilter">
+                            <option value="all">ทุกสถานะ</option>
+                            <option value="รอดำเนินการ">รอดำเนินการ</option>
+                            <option value="กำลังดำเนินการ">กำลังดำเนินการ</option>
+                            <option value="ยังไม่เสร็จ">ยังไม่เสร็จ</option>
+                            <option value="เสร็จสิ้น">เสร็จสิ้น</option>
+                        </select>
+                    </label>
+                </div>
+
+                <div id="workOrderList" class="workorder-list"></div>
+            </div>
+        </section>
+    </main>
+
+    <div id="reportModal" class="report-modal" hidden>
+        <div class="report-modal-backdrop" data-close-report></div>
+        <div class="report-modal-card" role="dialog" aria-labelledby="reportModalTitle" aria-modal="true">
+            <div class="report-modal-header">
+                <div>
+                    <span class="login-kicker">Daily Report</span>
+                    <h3 id="reportModalTitle">พิมพ์รายงานปิดวัน</h3>
+                    <p>เลือกวันที่ปิดรายงานและโรงแรมที่ต้องการส่งออก PDF</p>
+                </div>
+                <button class="report-modal-close" type="button" data-close-report aria-label="ปิด">×</button>
+            </div>
+
+            <form id="reportForm" class="report-form">
+                <label>
+                    <span>ตั้งแต่วันที่</span>
+                    <input type="date" id="reportDateFrom" required>
+                </label>
+
+                <label>
+                    <span>ถึงวันที่</span>
+                    <input type="date" id="reportDateTo" required>
+                </label>
+
+                <label>
+                    <span>โรงแรม</span>
+                    <select id="reportHotel" required>
+                        <option value="all">ทุกโรงแรมในคลัสเตอร์</option>
+                        <option value="Mercure Bangkok Surawong">Mercure Bangkok Surawong</option>
+                        <option value="ibis Styles Bangkok Silom">ibis Styles Bangkok Silom</option>
+                    </select>
+                </label>
+
+                <div id="reportPreview" class="report-preview" aria-live="polite"></div>
+
+                <div class="report-form-actions">
+                    <button class="ghost-button" type="button" data-close-report>ยกเลิก</button>
+                    <button class="primary-button" type="submit">สร้างและพิมพ์ PDF</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="userManageModal" class="report-modal" hidden>
+        <div class="report-modal-backdrop" data-close-user-manage></div>
+        <div class="report-modal-card user-manage-card" role="dialog" aria-labelledby="userManageTitle" aria-modal="true">
+            <div class="report-modal-header">
+                <div>
+                    <span class="login-kicker">User Management</span>
+                    <h3 id="userManageTitle">จัดการผู้ใช้และสิทธิ์</h3>
+                    <p>หัวหน้าสามารถสร้างบัญชีพนักงาน มอบสิทธิ์ และกำหนดรหัสผ่าน</p>
+                </div>
+                <button class="report-modal-close" type="button" data-close-user-manage aria-label="ปิด">×</button>
+            </div>
+
+            <form id="addUserForm" class="report-form user-add-form">
+                <label>
+                    <span>ชื่อผู้ใช้ (login)</span>
+                    <input type="text" id="newUserUsername" placeholder="เช่น somchai.mbk" required>
+                </label>
+                <label>
+                    <span>ชื่อที่แสดงในระบบ</span>
+                    <input type="text" id="newUserDisplayName" placeholder="เช่น สมชาย ใจดี" required>
+                </label>
+                <label>
+                    <span>รหัสผ่าน</span>
+                    <input type="password" id="newUserPassword" placeholder="กรอกรหัสผ่าน" required>
+                </label>
+                <label>
+                    <span>สิทธิ์การใช้งาน</span>
+                    <select id="newUserRole" required>
+                        <option value="employee">พนักงาน — เปิด/แก้ไขเคสได้</option>
+                        <option value="supervisor">หัวหน้า — ใช้งานได้ทั้งหมด</option>
+                    </select>
+                </label>
+                <button class="primary-button" type="submit">เพิ่มผู้ใช้</button>
+            </form>
+
+            <div id="userManageMessage" class="user-manage-message" hidden></div>
+            <div id="userList" class="user-list"></div>
+        </div>
+    </div>
+
+    <div id="printReportRoot" class="print-report-root" hidden></div>
+
+    <script src="script.js"></script>
+</body>
+</html>
