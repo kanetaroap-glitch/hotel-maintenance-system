@@ -60,6 +60,8 @@ const state = {
     allJobs: [],
     hotelJobs: [],
     editingJob: null,
+    editingUser: null,
+    existingImages: [],
     usersCache: []
 };
 
@@ -99,6 +101,12 @@ const message = document.getElementById("message");
 const category = document.getElementById("category");
 const status = document.getElementById("status");
 const detail = document.getElementById("detail");
+const receivedAtInput = document.getElementById("receivedAtInput");
+const completedAtInput = document.getElementById("completedAtInput");
+const jobImages = document.getElementById("jobImages");
+const jobImagesMeta = document.getElementById("jobImagesMeta");
+const jobImageLinks = document.getElementById("jobImageLinks");
+const deleteJobButton = document.getElementById("deleteJobButton");
 const searchPanel = document.getElementById("searchPanel");
 const roomSearchInput = document.getElementById("roomSearchInput");
 const roomSearchResults = document.getElementById("roomSearchResults");
@@ -211,6 +219,262 @@ async function apiPost(action, payload = {}) {
     return parseApiResponse(response);
 }
 
+function toDatetimeLocalValue(value) {
+    if (!value) {
+        return "";
+    }
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+        return "";
+    }
+
+    const pad = (item) => String(item).padStart(2, "0");
+    const year = date.getFullYear();
+    const month = pad(date.getMonth() + 1);
+    const day = pad(date.getDate());
+    const hours = pad(date.getHours());
+    const minutes = pad(date.getMinutes());
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+function fromDatetimeLocalValue(value) {
+    if (!value) {
+        return null;
+    }
+
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function createDefaultReceivedAtValue() {
+    return toDatetimeLocalValue(new Date().toISOString());
+}
+
+function extractGoogleDriveFileId(url = "") {
+    if (!url) {
+        return "";
+    }
+
+    const patterns = [
+        /[?&]id=([^&#]+)/i,
+        /\/d\/([^/]+)/i,
+        /\/file\/d\/([^/]+)/i
+    ];
+
+    for (const pattern of patterns) {
+        const match = String(url).match(pattern);
+        if (match?.[1]) {
+            return match[1];
+        }
+    }
+
+    return "";
+}
+
+function getImageDisplayUrl(image = {}) {
+    const rawUrl = String(image.displayUrl || image.url || image.previewUrl || "").trim();
+    const fileId = extractGoogleDriveFileId(rawUrl);
+
+    if (fileId) {
+        return `https://drive.google.com/thumbnail?id=${fileId}&sz=w1600`;
+    }
+
+    return rawUrl;
+}
+
+function getImageFallbackUrl(image = {}) {
+    const rawUrl = String(image.url || image.previewUrl || image.displayUrl || "").trim();
+    const fileId = extractGoogleDriveFileId(rawUrl);
+
+    if (fileId) {
+        return `https://drive.google.com/uc?export=view&id=${fileId}`;
+    }
+
+    return rawUrl;
+}
+
+function getImageFinalFallbackUrl(image = {}) {
+    const rawUrl = String(image.url || image.previewUrl || image.displayUrl || "").trim();
+    const fileId = extractGoogleDriveFileId(rawUrl);
+
+    if (fileId) {
+        return `https://lh3.googleusercontent.com/d/${fileId}=w1600`;
+    }
+
+    return rawUrl;
+}
+
+function getImageOpenUrl(image = {}) {
+    const rawUrl = String(image.openUrl || image.url || image.previewUrl || "").trim();
+    const fileId = extractGoogleDriveFileId(rawUrl);
+
+    if (fileId) {
+        return `https://drive.google.com/file/d/${fileId}/view`;
+    }
+
+    return rawUrl || "#";
+}
+
+function attachImageFallbackHandlers(root = document) {
+    root.querySelectorAll("img[data-fallback-src]").forEach((image) => {
+        if (image.dataset.fallbackBound === "true") {
+            return;
+        }
+
+        image.dataset.fallbackBound = "true";
+        image.addEventListener("error", () => {
+            const currentSrc = image.getAttribute("src") || "";
+            const fallbackSrc = image.dataset.fallbackSrc || "";
+            const finalFallbackSrc = image.dataset.finalFallbackSrc || "";
+
+            if (fallbackSrc && currentSrc !== fallbackSrc) {
+                image.src = fallbackSrc;
+                return;
+            }
+
+            if (finalFallbackSrc && currentSrc !== finalFallbackSrc) {
+                image.src = finalFallbackSrc;
+            }
+        });
+    });
+}
+
+function normalizeJobImages(rawImages) {
+    if (Array.isArray(rawImages)) {
+        return rawImages
+            .filter(Boolean)
+            .map((image) => ({
+                ...image,
+                displayUrl: getImageDisplayUrl(image),
+                fallbackUrl: getImageFallbackUrl(image),
+                finalFallbackUrl: getImageFinalFallbackUrl(image),
+                openUrl: getImageOpenUrl(image)
+            }));
+    }
+
+    if (typeof rawImages === "string" && rawImages.trim()) {
+        try {
+            const parsed = JSON.parse(rawImages);
+            return Array.isArray(parsed)
+                ? parsed.filter(Boolean).map((image) => ({
+                    ...image,
+                    displayUrl: getImageDisplayUrl(image),
+                    fallbackUrl: getImageFallbackUrl(image),
+                    finalFallbackUrl: getImageFinalFallbackUrl(image),
+                    openUrl: getImageOpenUrl(image)
+                }))
+                : [];
+        } catch {
+            return [];
+        }
+    }
+
+    return [];
+}
+
+function renderExistingImageLinks(images = []) {
+    jobImageLinks.innerHTML = "";
+
+    if (!images.length) {
+        return;
+    }
+
+    images.forEach((image, index) => {
+        const link = document.createElement("a");
+        link.className = "image-link-chip";
+        link.href = image.openUrl || image.url || image.previewUrl || "#";
+        link.target = "_blank";
+        link.rel = "noreferrer noopener";
+        link.textContent = image.name ? `เปิดรูป ${index + 1}: ${image.name}` : `เปิดรูป ${index + 1}`;
+        jobImageLinks.appendChild(link);
+    });
+}
+
+function buildImageLinkMarkup(images = []) {
+    if (!images.length) {
+        return "";
+    }
+
+    return `
+        <div class="image-link-list">
+            ${images.map((image, index) => `
+                <a class="image-link-chip" href="${escapeHtml(image.openUrl || image.url || image.previewUrl || "#")}" target="_blank" rel="noreferrer noopener">
+                    เปิดรูป ${index + 1}
+                </a>
+            `).join("")}
+        </div>
+    `;
+}
+
+function updateSelectedImagesMeta() {
+    const selectedCount = jobImages.files?.length || 0;
+    const existingCount = state.existingImages.length;
+    const totalCount = selectedCount + existingCount;
+
+    if (!totalCount) {
+        jobImagesMeta.textContent = "ยังไม่ได้เลือกรูป";
+        return;
+    }
+
+    const parts = [];
+    if (existingCount) {
+        parts.push(`มีรูปเดิม ${existingCount} รูป`);
+    }
+    if (selectedCount) {
+        parts.push(`เลือกรูปใหม่ ${selectedCount} รูป`);
+    }
+    jobImagesMeta.textContent = parts.join(" | ");
+}
+
+function syncCompletedAtInputState() {
+    const isComplete = status.value === "เสร็จสิ้น";
+
+    completedAtInput.disabled = false;
+    completedAtInput.required = false;
+
+    if (isComplete && !completedAtInput.value) {
+        completedAtInput.value = receivedAtInput.value || createDefaultReceivedAtValue();
+    }
+}
+
+function updateDeleteJobButton() {
+    if (!deleteJobButton) {
+        return;
+    }
+
+    deleteJobButton.hidden = !state.editingJob?.ticketNo;
+}
+
+async function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(reader.error || new Error("ไม่สามารถอ่านไฟล์ได้"));
+        reader.readAsDataURL(file);
+    });
+}
+
+async function fileToUploadPayload(file) {
+    const dataUrl = await readFileAsDataUrl(file);
+    return {
+        name: file.name,
+        mimeType: file.type || "image/jpeg",
+        dataUrl
+    };
+}
+
+async function collectNewImageUploads() {
+    const files = [...(jobImages.files || [])].slice(0, 6);
+    const uploads = [];
+
+    for (const file of files) {
+        uploads.push(await fileToUploadPayload(file));
+    }
+
+    return uploads;
+}
+
 function setButtonBusy(button, busy, busyText) {
     if (!button) {
         return;
@@ -308,6 +572,17 @@ async function createUserAccount({ username, displayName, password, role }) {
     return normalizeUserRecord(payload?.user || payload?.data || payload);
 }
 
+async function updateUserAccount({ username, displayName, password, role }) {
+    const payload = await apiPost("updateUser", {
+        username: username.trim().toLowerCase(),
+        displayName: displayName.trim(),
+        password: password?.trim() || "",
+        role,
+        updatedBy: getCurrentDisplayName()
+    });
+    return normalizeUserRecord(payload?.user || payload?.data || payload);
+}
+
 async function toggleUserAccount(username, active) {
     return apiPost("toggleUser", {
         username,
@@ -319,6 +594,21 @@ async function toggleUserAccount(username, active) {
 async function deleteUserAccount(username) {
     return apiPost("deleteUser", {
         username,
+        deletedBy: getCurrentDisplayName()
+    });
+}
+
+async function resetUserPassword(username, password) {
+    return apiPost("resetUserPassword", {
+        username,
+        password,
+        updatedBy: getCurrentDisplayName()
+    });
+}
+
+async function deleteWorkOrder(ticketNo) {
+    return apiPost("deleteWorkOrder", {
+        ticketNo,
         deletedBy: getCurrentDisplayName()
     });
 }
@@ -342,9 +632,10 @@ function getRoleLabel(role) {
 function updatePermissionsUI() {
     const supervisor = isSupervisor();
 
-    document.querySelectorAll(".supervisor-only").forEach((element) => {
-        element.hidden = !supervisor;
-    });
+    openUserManageButton.hidden = !supervisor;
+    openReportButton.hidden = false;
+    openSummaryButton.hidden = false;
+    openReportFromCases.hidden = false;
 
     if (activeUserRole) {
         activeUserRole.textContent = getRoleLabel(state.user?.role);
@@ -369,6 +660,8 @@ async function renderUserList() {
             </div>
             <div class="user-card-actions">
                 ${isCurrentUser ? '<span class="user-card-note">บัญชีปัจจุบัน</span>' : `
+                    <button type="button" class="ghost-button user-edit-button" data-user-action="edit" data-username="${user.username}">แก้ไข</button>
+                    <button type="button" class="ghost-button user-reset-button" data-user-action="reset-password" data-username="${user.username}">รีเซ็ตรหัสผ่าน</button>
                     <button type="button" class="ghost-button user-toggle-button" data-user-action="toggle" data-username="${user.username}">${user.active ? "ปิดใช้งาน" : "เปิดใช้งาน"}</button>
                     <button type="button" class="ghost-button user-delete-button" data-user-action="delete" data-username="${user.username}">ลบ</button>
                 `}
@@ -377,6 +670,25 @@ async function renderUserList() {
 
         userList.appendChild(card);
     });
+}
+
+function resetUserForm() {
+    state.editingUser = null;
+    addUserForm.reset();
+    newUserPassword.required = true;
+    addUserSubmitButton.textContent = "เพิ่มผู้ใช้";
+    addUserSubmitButton.dataset.defaultText = "เพิ่มผู้ใช้";
+}
+
+function fillUserForm(user) {
+    state.editingUser = user.username;
+    newUserUsername.value = user.username;
+    newUserDisplayName.value = user.displayName;
+    newUserPassword.value = "";
+    newUserPassword.required = false;
+    newUserRole.value = user.role;
+    addUserSubmitButton.textContent = "บันทึกการแก้ไข";
+    addUserSubmitButton.dataset.defaultText = "บันทึกการแก้ไข";
 }
 
 function showUserManageMessage(text, isError = false) {
@@ -391,7 +703,7 @@ async function openUserManageModal() {
     }
     setButtonBusy(openUserManageButton, true, "กำลังโหลด...");
     userManageMessage.hidden = true;
-    addUserForm.reset();
+    resetUserForm();
     userList.innerHTML = '<p class="workorder-empty">กำลังโหลดรายชื่อผู้ใช้...</p>';
     userManageModal.hidden = false;
     document.body.classList.add("modal-open");
@@ -526,7 +838,8 @@ function collectAllJobs() {
         completedAt: job.completedAt || job.closeDate || (job.status === "à¹€à¸ªà¸£à¹‡à¸ˆà¸ªà¸´à¹‰à¸™" ? job.dateTime : null),
         openedBy: job.openedBy || "",
         lastEditedBy: job.lastEditedBy || "",
-        closedBy: job.closedBy || ""
+        closedBy: job.closedBy || "",
+        images: normalizeJobImages(job.images || job.imagesJson)
     }));
 }
 
@@ -617,7 +930,7 @@ function escapeHtml(value) {
 
 function renderReportTableRows(jobs) {
     if (!jobs.length) {
-        return '<tr><td colspan="10" class="report-empty-row">ไม่มีรายการ</td></tr>';
+        return '<tr><td colspan="9" class="report-empty-row">ไม่มีรายการ</td></tr>';
     }
 
     return jobs.map((job) => `
@@ -628,12 +941,75 @@ function renderReportTableRows(jobs) {
             <td>${escapeHtml(job.status || "-")}</td>
             <td>${escapeHtml(formatThaiDateTime(getJobReceivedAt(job)))}</td>
             <td>${escapeHtml(formatThaiDateTime(getJobCompletedAt(job)))}</td>
-            <td>${escapeHtml(job.openedBy || "-")}</td>
             <td>${escapeHtml(job.lastEditedBy || "-")}</td>
-            <td>${escapeHtml(job.closedBy || "-")}</td>
             <td>${escapeHtml(job.detail || "-")}</td>
+            <td>${buildReportImageMarkup(job.images || [])}</td>
         </tr>
     `).join("");
+}
+
+function buildReportImageMarkup(images = []) {
+    if (!images.length) {
+        return '<span class="report-image-empty">-</span>';
+    }
+
+    return `
+        <div class="report-image-list">
+            ${images.map((image, index) => `
+                <a class="report-image-link" href="${escapeHtml(image.openUrl || image.url || image.previewUrl || "#")}" target="_blank" rel="noreferrer noopener">
+                    <img
+                        src="${escapeHtml(image.displayUrl || image.url || image.previewUrl || "")}"
+                        data-fallback-src="${escapeHtml(image.fallbackUrl || image.url || image.previewUrl || "")}"
+                        data-final-fallback-src="${escapeHtml(image.finalFallbackUrl || image.fallbackUrl || image.url || image.previewUrl || "")}"
+                        alt="ภาพงาน ${index + 1}"
+                    >
+                </a>
+            `).join("")}
+        </div>
+    `;
+}
+
+function buildSummaryImageMarkup(images = []) {
+    if (!images.length) {
+        return `
+            <div class="workorder-gallery workorder-gallery--empty">
+                <span>ยังไม่มีรูปประกอบงาน</span>
+            </div>
+        `;
+    }
+
+    const primaryImage = images[0];
+
+    return `
+        <div class="workorder-gallery">
+            <a
+                class="workorder-gallery-main"
+                href="${escapeHtml(primaryImage.openUrl || primaryImage.url || primaryImage.previewUrl || "#")}"
+                target="_blank"
+                rel="noreferrer noopener"
+            >
+                <img
+                    src="${escapeHtml(primaryImage.displayUrl || primaryImage.url || primaryImage.previewUrl || "")}"
+                    data-fallback-src="${escapeHtml(primaryImage.fallbackUrl || primaryImage.url || primaryImage.previewUrl || "")}"
+                    data-final-fallback-src="${escapeHtml(primaryImage.finalFallbackUrl || primaryImage.fallbackUrl || primaryImage.url || primaryImage.previewUrl || "")}"
+                    alt="${escapeHtml(primaryImage.name || "รูปประกอบงาน")}"
+                >
+            </a>
+            <div class="workorder-gallery-actions">
+                ${images.map((image, index) => `
+                    <a
+                        class="workorder-gallery-index"
+                        href="${escapeHtml(image.openUrl || image.url || image.previewUrl || "#")}"
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        aria-label="เปิดรูป ${index + 1}"
+                    >
+                        ${index + 1}
+                    </a>
+                `).join("")}
+            </div>
+        </div>
+    `;
 }
 
 function renderReportSection(title, jobs) {
@@ -649,10 +1025,9 @@ function renderReportSection(title, jobs) {
                         <th>สถานะ</th>
                         <th>รับงาน</th>
                         <th>เสร็จ</th>
-                        <th>เปิดโดย</th>
-                        <th>แก้ไขโดย</th>
-                        <th>ปิดโดย</th>
+                        <th>บันทึกล่าสุดโดย</th>
                         <th>รายละเอียด</th>
+                        <th>รูป</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -713,10 +1088,6 @@ function updateReportPreview() {
 }
 
 function openReportModal(defaultHotel = "all") {
-    if (!isSupervisor()) {
-        return;
-    }
-
     const todayKey = toDateKey(new Date());
     reportDateFrom.value = todayKey;
     reportDateTo.value = todayKey;
@@ -737,6 +1108,7 @@ function closeReportModal() {
 
 function printDailyReport(hotelFilter, dateFromKey, dateToKey) {
     printReportRoot.innerHTML = buildPrintReportHtml(hotelFilter, dateFromKey, dateToKey);
+    attachImageFallbackHandlers(printReportRoot);
     printReportRoot.hidden = false;
 
     const cleanup = () => {
@@ -845,7 +1217,8 @@ function getFilteredJobs() {
 
     return state.allJobs.filter((job) => {
         const hotelMatch = hotelFilter === "all" || job.hotel === hotelFilter;
-        const statusMatch = statusFilter === "all" || job.status === statusFilter;
+        const statusMatch = statusFilter === "all"
+            || (statusFilter === "incomplete" ? incompleteStatuses.includes(job.status) : job.status === statusFilter);
         return hotelMatch && statusMatch;
     });
 }
@@ -866,26 +1239,37 @@ function renderWorkOrders(jobs) {
 
         const receivedAt = job.receivedAt || job.dateTime;
         const completedAt = job.completedAt || (job.status === "เสร็จสิ้น" ? job.dateTime : null);
+        const summaryImages = normalizeJobImages(job.images || job.imagesJson);
 
         card.innerHTML = `
-            <div class="ticket-no">#${job.ticketNo || "-"}</div>
-            <div class="workorder-meta">รับงาน: ${formatThaiDateTime(receivedAt)}</div>
-            <div class="workorder-meta">เสร็จ: ${formatThaiDateTime(completedAt)}</div>
-            <div class="workorder-meta">เปิดโดย: ${escapeHtml(job.openedBy || "-")}</div>
-            <div class="workorder-meta">แก้ไขโดย: ${escapeHtml(job.lastEditedBy || "-")}</div>
-            <div class="workorder-meta">ปิดโดย: ${escapeHtml(job.closedBy || "-")}</div>
-            <div class="workorder-meta">🏨 ${job.hotel || "-"}</div>
-            <div class="workorder-meta">🚪 ห้อง ${job.room || "-"}</div>
-            <div class="workorder-meta">🔧 ${job.category || "-"}</div>
-            <p class="workorder-detail">${job.detail || "-"}</p>
-            <div class="status">📋 ${job.status || "-"}</div>
-            ${isEditable ? '<div class="workorder-edit-hint">กดเพื่อเปิดแก้ไขงานนี้</div>' : ""}
+            <div class="workorder-card-layout">
+                <div class="workorder-card-content">
+                    <div class="ticket-no">#${job.ticketNo || "-"}</div>
+                    <div class="workorder-meta">รับงาน: ${formatThaiDateTime(receivedAt)}</div>
+                    <div class="workorder-meta">เสร็จ: ${formatThaiDateTime(completedAt)}</div>
+                    <div class="workorder-meta">เปิดโดย: ${escapeHtml(job.openedBy || "-")}</div>
+                    <div class="workorder-meta">บันทึกล่าสุดโดย: ${escapeHtml(job.lastEditedBy || "-")}</div>
+                    <div class="workorder-meta">ปิดโดย: ${escapeHtml(job.closedBy || "-")}</div>
+                    <div class="workorder-meta">🏨 ${job.hotel || "-"}</div>
+                    <div class="workorder-meta">🚪 ห้อง ${job.room || "-"}</div>
+                    <div class="workorder-meta">🔧 ${job.category || "-"}</div>
+                    <p class="workorder-detail">${job.detail || "-"}</p>
+                    <div class="status">📋 ${job.status || "-"}</div>
+                    ${isEditable ? '<div class="workorder-edit-hint">กดเพื่อเปิดแก้ไขงานนี้</div>' : ""}
+                </div>
+                ${buildSummaryImageMarkup(summaryImages)}
+            </div>
         `;
 
         if (isEditable) {
             card.tabIndex = 0;
             card.setAttribute("role", "button");
-            card.addEventListener("click", () => openJobFormFromSummary(job));
+            card.addEventListener("click", (event) => {
+                if (event.target.closest(".workorder-gallery")) {
+                    return;
+                }
+                openJobFormFromSummary(job);
+            });
             card.addEventListener("keydown", (event) => {
                 if (event.key === "Enter" || event.key === " ") {
                     event.preventDefault();
@@ -896,6 +1280,8 @@ function renderWorkOrders(jobs) {
 
         workOrderList.appendChild(card);
     });
+
+    attachImageFallbackHandlers(workOrderList);
 }
 
 function renderSummaryView() {
@@ -956,10 +1342,6 @@ async function loadWorkOrders() {
 }
 
 async function openSummaryView() {
-    if (!isSupervisor()) {
-        return;
-    }
-
     setActiveView("summary");
     setButtonBusy(openSummaryButton, true, "กำลังโหลด...");
     try {
@@ -972,6 +1354,7 @@ async function openSummaryView() {
 function openJobForm(room) {
     state.room = room;
     state.editingJob = null;
+    state.existingImages = [];
 
     hotelInput.value = state.hotel;
     roomInput.value = room;
@@ -982,6 +1365,13 @@ function openJobForm(room) {
     category.value = "";
     status.value = "";
     detail.value = "";
+    receivedAtInput.value = createDefaultReceivedAtValue();
+    completedAtInput.value = "";
+    jobImages.value = "";
+    renderExistingImageLinks([]);
+    updateSelectedImagesMeta();
+    syncCompletedAtInputState();
+    updateDeleteJobButton();
     message.hidden = true;
 
     setActiveView("form");
@@ -991,6 +1381,7 @@ function openJobFormFromSummary(job) {
     state.hotel = job.hotel;
     state.room = job.room;
     state.editingJob = { ...job };
+    state.existingImages = normalizeJobImages(job.images || job.imagesJson);
 
     selectedHotelLabel.textContent = job.hotel;
     hotelInput.value = job.hotel;
@@ -1000,6 +1391,13 @@ function openJobFormFromSummary(job) {
     category.value = job.category || "";
     status.value = job.status || "";
     detail.value = job.detail || "";
+    receivedAtInput.value = toDatetimeLocalValue(job.receivedAt || job.dateTime || createDefaultReceivedAtValue());
+    completedAtInput.value = toDatetimeLocalValue(job.completedAt || job.closeDate || "");
+    jobImages.value = "";
+    renderExistingImageLinks(state.existingImages);
+    updateSelectedImagesMeta();
+    syncCompletedAtInputState();
+    updateDeleteJobButton();
     message.hidden = true;
 
     setActiveView("form");
@@ -1030,10 +1428,11 @@ function renderCases(hotelName) {
             </div>
             <div class="case-staff">
                 <span>เปิดโดย: ${escapeHtml(job.openedBy || "-")}</span>
-                <span>แก้ไขโดย: ${escapeHtml(job.lastEditedBy || "-")}</span>
+                <span>บันทึกล่าสุดโดย: ${escapeHtml(job.lastEditedBy || "-")}</span>
                 <span>ปิดโดย: ${escapeHtml(job.closedBy || "-")}</span>
             </div>
             <p>${escapeHtml(job.detail)}</p>
+            ${buildImageLinkMarkup(job.images || [])}
         `;
         card.addEventListener("click", () => openJobFormFromSummary(job));
         caseList.appendChild(card);
@@ -1146,22 +1545,32 @@ addUserForm.addEventListener("submit", async (event) => {
     const password = newUserPassword.value.trim();
     const role = newUserRole.value;
 
-    if (!username || !displayName || !password) {
+    if (!username || !displayName || (!state.editingUser && !password)) {
         showUserManageMessage("กรุณากรอกข้อมูลให้ครบถ้วน", true);
         return;
     }
 
     try {
         setButtonBusy(addUserSubmitButton, true, "กำลังเพิ่มผู้ใช้...");
-        await createUserAccount({
-            username,
-            displayName,
-            password,
-            role
-        });
-        addUserForm.reset();
+        if (state.editingUser) {
+            await updateUserAccount({
+                username,
+                displayName,
+                password,
+                role
+            });
+            showUserManageMessage("บันทึกการแก้ไขผู้ใช้สำเร็จ");
+        } else {
+            await createUserAccount({
+                username,
+                displayName,
+                password,
+                role
+            });
+            showUserManageMessage("เพิ่มผู้ใช้สำเร็จ");
+        }
+        resetUserForm();
         await renderUserList();
-        showUserManageMessage("เพิ่มผู้ใช้สำเร็จ");
     } catch (error) {
         console.error(error);
         showUserManageMessage(error.message || "ไม่สามารถเพิ่มผู้ใช้ได้", true);
@@ -1192,6 +1601,29 @@ userList.addEventListener("click", async (event) => {
     }
 
     try {
+        if (action === "edit") {
+            fillUserForm(targetUser);
+            showUserManageMessage("แก้ไขข้อมูลผู้ใช้แล้วกดบันทึกได้เลย");
+            return;
+        }
+
+        if (action === "reset-password") {
+            const newPassword = window.prompt(`กำหนดรหัสผ่านใหม่สำหรับ ${targetUser.displayName}`, "");
+
+            if (newPassword === null) {
+                return;
+            }
+
+            if (!newPassword.trim()) {
+                showUserManageMessage("กรุณากรอกรหัสผ่านใหม่", true);
+                return;
+            }
+
+            await resetUserPassword(username, newPassword.trim());
+            showUserManageMessage(`รีเซ็ตรหัสผ่านของ ${targetUser.displayName} สำเร็จ`);
+            return;
+        }
+
         if (action === "toggle") {
             await toggleUserAccount(username, !targetUser.active);
             await renderUserList();
@@ -1212,12 +1644,51 @@ userList.addEventListener("click", async (event) => {
 reportDateFrom.addEventListener("change", updateReportPreview);
 reportDateTo.addEventListener("change", updateReportPreview);
 reportHotel.addEventListener("change", updateReportPreview);
-reportForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
+status.addEventListener("change", syncCompletedAtInputState);
+jobImages.addEventListener("change", updateSelectedImagesMeta);
+deleteJobButton.addEventListener("click", async () => {
+    const ticketNo = state.editingJob?.ticketNo;
 
-    if (!isSupervisor()) {
+    if (!ticketNo) {
         return;
     }
+
+    const confirmed = window.confirm(`ยืนยันลบเคส ${ticketNo} ใช่หรือไม่?\nเมื่อลบแล้วจะไม่สามารถกู้คืนจากหน้าเว็บได้`);
+    if (!confirmed) {
+        return;
+    }
+
+    try {
+        setButtonBusy(deleteJobButton, true, "กำลังลบ...");
+        await deleteWorkOrder(ticketNo);
+        await refreshHotelJobs(state.hotel);
+        await refreshAllJobs();
+
+        message.hidden = false;
+        message.innerHTML = `<strong>✅ ลบเคสสำเร็จ</strong><br>เลขที่งาน: ${ticketNo}`;
+
+        jobForm.reset();
+        state.editingJob = null;
+        state.existingImages = [];
+        renderExistingImageLinks([]);
+        updateSelectedImagesMeta();
+        receivedAtInput.value = createDefaultReceivedAtValue();
+        completedAtInput.value = "";
+        syncCompletedAtInputState();
+        updateDeleteJobButton();
+        renderCases(state.hotel);
+        renderSummaryView();
+        setActiveView("room");
+    } catch (error) {
+        console.error(error);
+        message.hidden = false;
+        message.innerHTML = `❌ ${error.message || "ไม่สามารถลบเคสได้"}`;
+    } finally {
+        setButtonBusy(deleteJobButton, false);
+    }
+});
+reportForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
 
     if (!reportDateFrom.value || !reportDateTo.value) {
         return;
@@ -1307,27 +1778,41 @@ jobForm.addEventListener("submit", async (event) => {
     event.preventDefault();
 
     const editorName = getCurrentDisplayName();
-    const isComplete = status.value === "เสร็จสิ้น";
+    const selectedStatus = status.value;
+    const isComplete = selectedStatus === "เสร็จสิ้น";
     const editingJob = state.editingJob;
     const existingCase = editingJob || getIncompleteCasesForHotel(state.hotel).find((job) => String(job.room) === String(state.room));
     const ticketNo = editingJob?.ticketNo || existingCase?.ticketNo || "MT" + Date.now();
+    const receivedAt = fromDatetimeLocalValue(receivedAtInput.value) || existingCase?.receivedAt || editingJob?.receivedAt || new Date().toISOString();
+    const completedAt = isComplete
+        ? (fromDatetimeLocalValue(completedAtInput.value) || existingCase?.completedAt || editingJob?.completedAt || new Date().toISOString())
+        : null;
 
     const jobData = {
         ticketNo,
         hotel: state.hotel,
         room: state.room,
         category: category.value,
-        status: status.value,
+        status: selectedStatus,
         detail: detail.value.trim(),
-        receivedAt: existingCase?.receivedAt || editingJob?.receivedAt || new Date().toISOString(),
-        completedAt: isComplete ? new Date().toISOString() : null,
+        receivedAt,
+        completedAt,
         openedBy: existingCase?.openedBy || editingJob?.openedBy || editorName,
         lastEditedBy: editorName,
-        closedBy: isComplete ? editorName : null
+        closedBy: isComplete ? editorName : null,
+        existingImages: normalizeJobImages(
+            editingJob?.images
+            || editingJob?.imagesJson
+            || existingCase?.images
+            || existingCase?.imagesJson
+            || state.existingImages
+        ),
+        newImages: []
     };
 
     try {
         setButtonBusy(jobSubmitButton, true, "กำลังบันทึก...");
+        jobData.newImages = await collectNewImageUploads();
         await apiPost("saveWorkOrder", {
             ticketNo: ticketNo,
             dateTime: jobData.receivedAt,
@@ -1340,7 +1825,9 @@ jobForm.addEventListener("submit", async (event) => {
             closeDate: jobData.completedAt,
             openedBy: jobData.openedBy,
             lastEditedBy: jobData.lastEditedBy,
-            closedBy: jobData.closedBy
+            closedBy: jobData.closedBy,
+            existingImages: jobData.existingImages,
+            newImages: jobData.newImages
         });
 
         await refreshHotelJobs(jobData.hotel);
@@ -1363,6 +1850,13 @@ jobForm.addEventListener("submit", async (event) => {
 
         jobForm.reset();
         state.editingJob = null;
+        state.existingImages = [];
+        renderExistingImageLinks([]);
+        updateSelectedImagesMeta();
+        receivedAtInput.value = createDefaultReceivedAtValue();
+        completedAtInput.value = "";
+        syncCompletedAtInputState();
+        updateDeleteJobButton();
 
     } catch (error) {
 

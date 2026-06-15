@@ -17,7 +17,8 @@ const WORK_ORDER_HEADERS = [
   'closeDate',
   'openedBy',
   'lastEditedBy',
-  'closedBy'
+  'closedBy',
+  'imagesJson'
 ];
 
 const USER_HEADERS = [
@@ -77,6 +78,16 @@ function doPost(e) {
           ok: true,
           user: createUser_(payload)
         });
+      case 'updateUser':
+        return jsonOutput_({
+          ok: true,
+          user: updateUser_(payload)
+        });
+      case 'resetUserPassword':
+        return jsonOutput_({
+          ok: true,
+          user: resetUserPassword_(payload.username, payload.password, payload.updatedBy)
+        });
       case 'toggleUser':
         return jsonOutput_({
           ok: true,
@@ -87,6 +98,12 @@ function doPost(e) {
           ok: true,
           deleted: true,
           username: deleteUser_(payload.username)
+        });
+      case 'deleteWorkOrder':
+        return jsonOutput_({
+          ok: true,
+          deleted: true,
+          ticketNo: deleteWorkOrder_(payload.ticketNo)
         });
       default:
         return jsonOutput_({ ok: false, message: 'Unknown action: ' + action });
@@ -203,8 +220,14 @@ function listWorkOrders_() {
 function saveWorkOrder_(payload) {
   const sheet = getSheet_(SHEET_NAMES.WORK_ORDERS, WORK_ORDER_HEADERS);
   const now = new Date().toISOString();
+  const resolvedTicketNo = normalizeString_(payload.ticketNo) || ('MT' + new Date().getTime());
+  const imageRecords = mergeImageRecords_(
+    payload.existingImages,
+    payload.newImages,
+    resolvedTicketNo
+  );
   const record = normalizeWorkOrderRecord_({
-    ticketNo: normalizeString_(payload.ticketNo) || ('MT' + new Date().getTime()),
+    ticketNo: resolvedTicketNo,
     dateTime: normalizeString_(payload.dateTime) || now,
     hotel: normalizeString_(payload.hotel),
     room: normalizeString_(payload.room),
@@ -216,7 +239,8 @@ function saveWorkOrder_(payload) {
     closeDate: normalizeString_(payload.closeDate),
     openedBy: normalizeString_(payload.openedBy),
     lastEditedBy: normalizeString_(payload.lastEditedBy),
-    closedBy: normalizeString_(payload.closedBy)
+    closedBy: normalizeString_(payload.closedBy),
+    imagesJson: imageRecords.length ? JSON.stringify(imageRecords) : ''
   });
 
   if (record.status === 'เสร็จสิ้น' && !record.closeDate) {
@@ -337,6 +361,55 @@ function createUser_(payload) {
   return toPublicUser_(record);
 }
 
+function updateUser_(payload) {
+  const username = normalizeUsername_(payload.username);
+  const displayName = normalizeString_(payload.displayName);
+  const password = normalizeString_(payload.password);
+  const role = normalizeRole_(payload.role);
+  const updatedBy = normalizeString_(payload.updatedBy) || 'system';
+  const row = findUserRow_(username);
+
+  if (!row) {
+    throw new Error('ไม่พบบัญชีผู้ใช้');
+  }
+
+  if (!displayName) {
+    throw new Error('กรุณาระบุชื่อที่แสดง');
+  }
+
+  row.record.displayName = displayName;
+  row.record.role = role;
+  row.record.updatedAt = new Date().toISOString();
+  row.record.updatedBy = updatedBy;
+
+  if (password) {
+    row.record.passwordHash = hashPassword_(password);
+  }
+
+  writeObjectAtRow_(row.sheet, row.rowIndex, USER_HEADERS, row.record);
+  return toPublicUser_(row.record);
+}
+
+function resetUserPassword_(username, password, updatedBy) {
+  const normalizedPassword = normalizeString_(password);
+  const row = findUserRow_(username);
+
+  if (!row) {
+    throw new Error('ไม่พบบัญชีผู้ใช้');
+  }
+
+  if (!normalizedPassword) {
+    throw new Error('กรุณาระบุรหัสผ่านใหม่');
+  }
+
+  row.record.passwordHash = hashPassword_(normalizedPassword);
+  row.record.updatedAt = new Date().toISOString();
+  row.record.updatedBy = normalizeString_(updatedBy) || 'system';
+
+  writeObjectAtRow_(row.sheet, row.rowIndex, USER_HEADERS, row.record);
+  return toPublicUser_(row.record);
+}
+
 function toggleUser_(username, active, updatedBy) {
   const row = findUserRow_(username);
   if (!row) {
@@ -358,6 +431,33 @@ function deleteUser_(username) {
 
   row.sheet.deleteRow(row.rowIndex);
   return row.record.username;
+}
+
+function deleteWorkOrder_(ticketNo) {
+  const normalizedTicketNo = normalizeString_(ticketNo);
+  if (!normalizedTicketNo) {
+    throw new Error('กรุณาระบุเลขที่งาน');
+  }
+
+  const deletedPrimary = deleteWorkOrderFromSheet_(getSheet_(SHEET_NAMES.WORK_ORDERS, WORK_ORDER_HEADERS), normalizedTicketNo);
+  const legacySheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAMES.LEGACY_WORK_ORDER);
+  const deletedLegacy = legacySheet ? deleteWorkOrderFromSheet_(legacySheet, normalizedTicketNo) : false;
+
+  if (!deletedPrimary && !deletedLegacy) {
+    throw new Error('ไม่พบเคสที่ต้องการลบ');
+  }
+
+  return normalizedTicketNo;
+}
+
+function deleteWorkOrderFromSheet_(sheet, ticketNo) {
+  const row = findRowByValue_(sheet, 1, ticketNo);
+  if (!row) {
+    return false;
+  }
+
+  sheet.deleteRow(row.rowIndex);
+  return true;
 }
 
 function findUserRow_(username) {
@@ -492,7 +592,8 @@ function normalizeWorkOrderRecord_(record) {
     closeDate: normalizeDateValue_(record.closeDate),
     openedBy: normalizeString_(record.openedBy),
     lastEditedBy: normalizeString_(record.lastEditedBy),
-    closedBy: normalizeString_(record.closedBy)
+    closedBy: normalizeString_(record.closedBy),
+    imagesJson: normalizeImagesJson_(record.imagesJson)
   };
 }
 
@@ -510,8 +611,94 @@ function normalizeLegacyWorkOrder_(record) {
     closeDate: record.closeDate,
     openedBy: record.openedBy,
     lastEditedBy: record.lastEditedBy,
-    closedBy: record.closedBy
+    closedBy: record.closedBy,
+    imagesJson: record.imagesJson
   });
+}
+
+function mergeImageRecords_(existingImages, newImages, ticketNo) {
+  const merged = normalizeImageRecords_(existingImages);
+  const uploads = Array.isArray(newImages) ? newImages : [];
+
+  uploads.forEach(function(file, index) {
+    if (!file || !file.dataUrl) {
+      return;
+    }
+
+    const uploaded = uploadImageToDrive_(file, ticketNo, index + 1);
+    if (uploaded) {
+      merged.push(uploaded);
+    }
+  });
+
+  return merged;
+}
+
+function normalizeImageRecords_(value) {
+  if (!value) {
+    return [];
+  }
+
+  var records = value;
+  if (typeof value === 'string') {
+    try {
+      records = JSON.parse(value);
+    } catch (error) {
+      return [];
+    }
+  }
+
+  if (!Array.isArray(records)) {
+    return [];
+  }
+
+  return records.map(function(item) {
+    return {
+      name: normalizeString_(item.name),
+      url: normalizeString_(item.url || item.previewUrl),
+      mimeType: normalizeString_(item.mimeType)
+    };
+  }).filter(function(item) {
+    return item.url;
+  });
+}
+
+function normalizeImagesJson_(value) {
+  var records = normalizeImageRecords_(value);
+  return records.length ? JSON.stringify(records) : '';
+}
+
+function uploadImageToDrive_(file, ticketNo, index) {
+  var mimeType = normalizeString_(file.mimeType) || 'image/jpeg';
+  var dataUrl = normalizeString_(file.dataUrl);
+  var base64Data = dataUrl.split(',')[1];
+
+  if (!base64Data) {
+    return null;
+  }
+
+  var bytes = Utilities.base64Decode(base64Data);
+  var extension = mimeType.split('/')[1] || 'jpg';
+  var safeTicketNo = normalizeString_(ticketNo) || ('MT' + new Date().getTime());
+  var filename = normalizeString_(file.name) || (safeTicketNo + '-' + index + '.' + extension);
+  var folder = getMaintenanceImageFolder_();
+  var driveFile = folder.createFile(Utilities.newBlob(bytes, mimeType, filename));
+
+  try {
+    driveFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  } catch (error) {
+  }
+
+  return {
+    name: driveFile.getName(),
+    url: 'https://drive.google.com/uc?export=view&id=' + driveFile.getId(),
+    mimeType: mimeType
+  };
+}
+
+function getMaintenanceImageFolder_() {
+  var folders = DriveApp.getFoldersByName('Hotel Maintenance Uploads');
+  return folders.hasNext() ? folders.next() : DriveApp.createFolder('Hotel Maintenance Uploads');
 }
 
 function getWorkOrderKey_(record) {

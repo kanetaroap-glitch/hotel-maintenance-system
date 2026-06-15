@@ -80,8 +80,8 @@
                 </div>
                 <div class="workspace-actions">
                     <button id="openUserManageButton" class="ghost-button supervisor-only" type="button" hidden>จัดการผู้ใช้</button>
-                    <button id="openReportButton" class="report-button supervisor-only" type="button" hidden>พิมพ์รายงาน PDF</button>
-                    <button id="openSummaryButton" class="summary-button supervisor-only" type="button" hidden>ดูรายการงานรวม</button>
+                    <button id="openReportButton" class="report-button" type="button">พิมพ์รายงาน PDF</button>
+                    <button id="openSummaryButton" class="summary-button" type="button">ดูรายการงานรวม</button>
                     <button id="logoutButton" class="logout-button" type="button">ออกจากระบบ</button>
                 </div>
             </div>
@@ -162,7 +162,7 @@
                             <p id="caseBoardDescription">แสดงเฉพาะงานที่ยังไม่เสร็จจากฐานข้อมูลจริงใน Google Sheets</p>
                         </div>
                         <div class="case-board-actions">
-                            <button id="openReportFromCases" class="ghost-button report-inline-button supervisor-only" type="button" hidden>พิมพ์รายงาน PDF</button>
+                            <button id="openReportFromCases" class="ghost-button report-inline-button" type="button">พิมพ์รายงาน PDF</button>
                             <span class="case-badge" id="caseBadge">0 เคส</span>
                         </div>
                     </div>
@@ -212,6 +212,16 @@
                                 <option value="เสร็จสิ้น">เสร็จสิ้น</option>
                             </select>
                         </label>
+
+                        <label>
+                            <span>วันเวลารับงาน</span>
+                            <input type="datetime-local" id="receivedAtInput" required>
+                        </label>
+
+                        <label>
+                            <span>วันเวลาปิดงาน</span>
+                            <input type="datetime-local" id="completedAtInput">
+                        </label>
                     </div>
 
                     <label class="full-width">
@@ -219,7 +229,17 @@
                         <textarea id="detail" rows="6" placeholder="เช่น เปลี่ยนหลอดไฟในห้องน้ำ ตรวจเช็กปลั๊กหัวเตียง และทดสอบการใช้งาน" required></textarea>
                     </label>
 
+                    <label class="full-width">
+                        <span>รูปประกอบงาน</span>
+                        <input type="file" id="jobImages" accept="image/*" multiple>
+                    </label>
+
+                    <div id="jobImagesMeta" class="upload-meta">ยังไม่ได้เลือกรูป</div>
+
+                    <div id="jobImageLinks" class="image-link-list"></div>
+
                     <div class="form-actions">
+                        <button class="danger-button" id="deleteJobButton" type="button" hidden>ลบเคสนี้</button>
                         <button class="primary-button" type="submit">บันทึกงาน</button>
                     </div>
                 </form>
@@ -265,6 +285,7 @@
                     <label>
                         <span>กรองตามสถานะ</span>
                         <select id="summaryStatusFilter">
+                            <option value="incomplete" selected>เฉพาะงานที่ยังไม่เสร็จ</option>
                             <option value="all">ทุกสถานะ</option>
                             <option value="รอดำเนินการ">รอดำเนินการ</option>
                             <option value="กำลังดำเนินการ">กำลังดำเนินการ</option>
@@ -328,7 +349,7 @@
                 <div>
                     <span class="login-kicker">User Management</span>
                     <h3 id="userManageTitle">จัดการผู้ใช้และสิทธิ์</h3>
-                    <p>หัวหน้าสามารถสร้างบัญชีพนักงาน มอบสิทธิ์ และกำหนดรหัสผ่าน</p>
+                    <p>หัวหน้าสามารถเพิ่ม แก้ไขสิทธิ์ และปรับชื่อผู้ใช้ในระบบได้จากหน้านี้</p>
                 </div>
                 <button class="report-modal-close" type="button" data-close-user-manage aria-label="ปิด">×</button>
             </div>
@@ -344,12 +365,12 @@
                 </label>
                 <label>
                     <span>รหัสผ่าน</span>
-                    <input type="password" id="newUserPassword" placeholder="กรอกรหัสผ่าน" required>
+                    <input type="password" id="newUserPassword" placeholder="กรอกรหัสผ่าน หรือเว้นว่างถ้าไม่เปลี่ยน">
                 </label>
                 <label>
                     <span>สิทธิ์การใช้งาน</span>
                     <select id="newUserRole" required>
-                        <option value="employee">พนักงาน — เปิด/แก้ไขเคสได้</option>
+                        <option value="employee">พนักงาน — ใช้งานระบบได้ทั้งหมด ยกเว้นจัดการผู้ใช้</option>
                         <option value="supervisor">หัวหน้า — ใช้งานได้ทั้งหมด</option>
                     </select>
                 </label>
